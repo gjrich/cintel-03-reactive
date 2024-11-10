@@ -1,24 +1,12 @@
-# Additional Python Notes
-# ------------------------
+# Gabriel Richards
+# November 2024
+# Filtering the Palmer Penguins dataset using Shiny
 
-# Capitalization matters in Python. Python is case-sensitive: min and Min are different.
-# Spelling matters in Python. You must match the spelling of functions and variables exactly.
-# Indentation matters in Python. Indentation is used to define code blocks and must be consistent.
+# Shiny App created for use in Shinylive:
+# https://shinylive.io/py/examples/#plotly
 
-
-# For example:
-#    The function filtered_data() takes no arguments.
-#    The function between(min, max) takes two arguments, a minimum and maximum value.
-#    Arguments can be positional or keyword arguments, labeled with a parameter name.
-
-# The function body is indented (consistently!) after the colon. 
-# Use the return keyword to return a value from a function.
-    
-# Decorators
-# ----------
-# Use the @ symbol to decorate a function with a decorator.
-# Decorators a concise way of calling a function on a function.
-# We don't typically write decorators, but we often use them.
+# To use, paste packages in requirements.txt and code from this app.py into the matching tabs in the link above, and then run the code.
+# Please send any issues or recommendations you find to gabrieljrich@pm.me
 
 
 import plotly.express as px
@@ -28,20 +16,22 @@ from shiny import reactive
 import palmerpenguins  # This package provides the Palmer Penguins dataset
 import seaborn as sns
 import matplotlib.pyplot as plt
+import pandas as pd
 
 
 # Use the built-in function to load the Palmer Penguins dataset
 # Columns include:
 # - species: chinstrap, adelie, and gentoo
 # - island: island name: Dream, torgensen, or Biscoe - islands in the Palmer Archipelago
-# - bill_length_mm: length of bill in mm
-# - bill_depth_mm: depth of bill in mm
-# - flipper_length_mm: flipper length in mm
-# - body_mass_g: body mass in grams
+# - bill_length_mm: length of bill in millimeters (mm)
+# - bill_depth_mm: depth of bill in millimeters (mm)
+# - flipper_length_mm: flipper length in millimeters (mm)
+# - body_mass_g: body mass in grams (g)
 # - sex: male or female
 
 # it is then loaded into a pandas dataframe
 penguin_df = palmerpenguins.load_penguins()
+
 
 with ui.layout_columns():
     # Data Table
@@ -84,7 +74,7 @@ with ui.sidebar(open="open"):
     #   pass in two arguments:
     #   the name of the input (in quotes), e.g. "plotly_bin_count"
     #   the label for the input (in quotes)
-    ui.input_numeric("plotly_bin_count", label="Plotly hist bin count", value=20)
+    ui.input_numeric("plotly_bin_count", label="Plotly hist bin count", value=10, min=2, max=50)
 
 
     # Use ui.input_slider() to create a slider input for the number of Seaborn bins
@@ -94,8 +84,9 @@ with ui.sidebar(open="open"):
     #   the minimum value for the input (as an integer)
     #   the maximum value for the input (as an integer)
     #   the default value for the input (as an integer)
-    ui.input_slider("seaborn_bin_count", label="Seaborn hist bin count", min=2, max=20, value=10) 
+    ui.input_slider("seaborn_bin_count", label="Seaborn hist bin count", min=2, max=50, value=10) 
 
+    ui.hr()
     
     # Use ui.input_checkbox_group() to create a checkbox group input to filter the species
     #   pass in five arguments:
@@ -104,7 +95,13 @@ with ui.sidebar(open="open"):
     #   a list of options for the input (in square brackets) as ["Adelie", "Gentoo", "Chinstrap"]
     #   a keyword argument selected= a list of selected options for the input (in square brackets)
     #   a keyword argument inline= a Boolean value (True or False) as you like
-    ui.input_checkbox_group("selected_species_list", label="Species", choices=["Adelie", "Chinstrap","Gentoo"], selected=["Adelie"],inline=False)
+    ui.input_checkbox_group("selected_species_list", label="Filter Species", choices=["Adelie", "Chinstrap","Gentoo"], selected=["Adelie"],inline=False)
+
+    ui.input_checkbox_group("selected_island_list", label="Filter Island", choices=["Biscoe", "Dream","Torgersen"], selected=["Biscoe"],inline=False)
+
+    ui.input_checkbox_group("selected_sex_list", label="Filter Sex", choices=["Male", "Female"], selected=["Male", "Female"],inline=False)
+
+    ui.input_slider("mass_min_max_range", "Filter by Mass (g)", min=2500, max=6500, value=[2500,6000])
 
     # Use ui.hr() to add a horizontal rule to the sidebar
     ui.hr()
@@ -114,9 +111,30 @@ with ui.sidebar(open="open"):
     #   the text for the hyperlink (in quotes), e.g. "GitHub"
     #   a keyword argument href= the URL for the hyperlink (in quotes), e.g. your GitHub repo URL
     #   a keyword argument target= "_blank" to open the link in a new tab
-    ui.a("gjrich - github", href="https://github.com/gjrich/cintel-02-data/")
+    ui.a("gjrich - github", href="https://github.com/gjrich/cintel-03-reactive/")
 
-# When passing in multiple arguments to a function, separate them with commas.
+# Filter the dataset 
+@reactive_calc
+def filtered_data() -> pd.DataFrame:
+    
+    # Filter penguin_df based on selected species & island
+    selected_species = input.selected_species_list()  # Get the selected species from the checkbox group
+    filtered_df = penguin_df[penguin_df["species"].isin(selected_species)]
+    selected_island = input.selected_island_list() # get selected island from checkbox group
+    filtered_df = filtered_df[filtered_df["island"].isin(selected_island)]
+
+    # Filter based on sex
+    selected_sex = input.selected_sex_list()
+    filtered_df = filtered_df[filtered_df["sex"].isin(selected_sex)]
+
+    # Filter based on body mass
+    selected_min_mass, selected_max_mass = input.mass_min_max_range()
+    filtered_df = filtered_df[(filtered_df["body_mass_g"] <= selected_max_mass) & (filtered_df["body_mass_g"] >= selected_min_mass)]
+    
+    if filtered_df.empty:
+        return pd.DataFrame()
+    
+    return filtered_df
 
 
 
@@ -141,7 +159,7 @@ with ui.layout_columns():
         ui.card_header("Seaborn Histogram")
         @render.plot
         def plot2():
-            ax=sns.histplot(data=penguin_df, x=input.selected_attribute(), bins=input.seaborn_bin_count())
+            ax=sns.histplot(data=filtered_df, x=input.selected_attribute(), bins=input.seaborn_bin_count())
             ax.set_title("Penguins")
             ax.set_xlabel(input.selected_attribute())
             ax.set_ylabel("Count")
@@ -151,9 +169,6 @@ with ui.layout_columns():
         ui.card_header("Plotly Scatterplot: Species")
         @render_plotly
         def plotly_scatterplot():
-            # Filter penguin_df based on selected species
-            selected_species = input.selected_species_list()  # Get the selected species from the checkbox group
-            filtered_df = penguin_df[penguin_df["species"].isin(selected_species)]
                         
             return px.scatter(
                 data_frame=filtered_df,
@@ -178,17 +193,19 @@ with ui.layout_columns():
 
     with ui.card():
         ui.card_header("Reactive Calc")
-        @reactive.calc
-        def filtered_data():
-            return penguin_df
 
         @render.plot(alt="A Seaborn histogram on penguin body mass in grams.")
         def seaborn_histogram():
-                    histplot = sns.histplot(data=filtered_data(), x="body_mass_g", bins=input.seaborn_bin_count() )
+                    histplot = sns.histplot(data=filtered_df, x="body_mass_g", bins=input.seaborn_bin_count() )
                     histplot.set_title("Palmer Penguins")
                     histplot.set_xlabel("Mass (g)")
                     histplot.set_ylabel("Count")
                     return histplot
                 
                 
-
+# Bonus Notes:
+# Decorators
+# ----------
+# Use the @ symbol to decorate a function with a decorator.
+# Decorators a concise way of calling a function on a function.
+# We don't typically write decorators, but we often use them.
